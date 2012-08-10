@@ -282,11 +282,11 @@ def main():
     logtail_lock_file  = '%s/%s-%s%s.lock' % (state_dir, options.tailer, class_name, dirsafe_logfile)
     if (options.tailer == 'logtail'):
         logtail_state_file = '%s/logtail-%s%s.state' % (state_dir, class_name, dirsafe_logfile)
-        shell_tail = "%s -f %s -o %s" % (logtail, log_file, logtail_state_file)
+        shell_tail = "%s -f '%s' -o '%s'" % (logtail, log_file, logtail_state_file)
     elif (options.tailer == 'retail'):
         retail_state_file = '%s/retail-%s%s' % (state_dir, class_name, dirsafe_logfile)
         retail_duration_file = '%s/retail-%s%s.dur' % (state_dir, class_name, dirsafe_logfile)
-        shell_tail = "%s -s %s -f %s" % (retail, retail_state_file, log_file)
+        shell_tail = "%s -s '%s' -f '%s'" % (retail, retail_state_file, log_file)
 
     logger.debug("trying to get lock on %s", logtail_lock_file)
 
