@@ -176,14 +176,41 @@ def submit_ganglia(metrics, options):
             print "%s" % gmetric_cmd
 
 
+def submit_graphite_clot(clot_file, s):
+    '''Open a previously created clot file (one Graphite metric per line),
+    send the metrics to the open Graphite socket, then close and remove the
+    clot file.'''
+
+    try:
+        clot = open(clot_file, 'r')
+        for line in clot:
+            s.send(line)
+        clot.close()
+        os.unlink(clot_file)
+    except:
+        logger.warning("Unable to send Graphite clot file %s" % clot_file)
+
+
 def submit_graphite(metrics, options):
+    '''Submit statistics to Graphite.  If socket can't be opened to Graphite,
+    we create a clot file and append the statistics to the end of it for
+    later sending to Graphite.'''
+
     if (re.match("^[\w\.\-]+\:\d+$", options.graphite_host) == None):
         raise Exception, "Invalid host:port found for Graphite: '%s'" % options.graphite_host
 
     if (not options.dry_run):
         host = options.graphite_host.split(':')
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host[0], int(host[1])))
+        dirsafe_logfile = log_file.replace('/','-')
+        clot_file = '%s/logster-%s%s.clot' % (state_dir, class_name, dirsafe_logfile)
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host[0], int(host[1])))
+            graphite_available = True
+        except:
+            logger.warning("Failed to open Graphite socket, using clot file %s" % clot_file)
+            clot = open(clot_file, 'a')
+            graphite_available = False
 
     for metric in metrics:
 
@@ -194,12 +221,23 @@ def submit_graphite(metrics, options):
         logger.debug("Submitting Graphite metric: %s" % metric_string)
 
         if (not options.dry_run):
-            s.send("%s\n" % metric_string)
+            if graphite_available:
+                s.send("%s\n" % metric_string)
+            else:
+                clot.write("%s\n" % metric_string)
         else:
             print "%s %s" % (options.graphite_host, metric_string)
 
     if (not options.dry_run):
-        s.close()
+        if graphite_available:
+            # see if there was a previously created clot file and send it
+            # now, too.
+            if os.path.isfile(clot_file):
+                submit_graphite_clot(clot_file, s)
+
+            s.close()
+        else:
+            clot.close()
 
 
 def start_locking(lockfile_name):
@@ -241,13 +279,14 @@ def main():
 
     dirsafe_logfile = log_file.replace('/','-')
 
-    logtail_lock_file  = '%s/logtail-%s%s.lock' % (state_dir, class_name, dirsafe_logfile)
+    logtail_lock_file  = '%s/%s-%s%s.lock' % (state_dir, options.tailer, class_name, dirsafe_logfile)
     if (options.tailer == 'logtail'):
         logtail_state_file = '%s/logtail-%s%s.state' % (state_dir, class_name, dirsafe_logfile)
         shell_tail = "%s -f %s -o %s" % (logtail, log_file, logtail_state_file)
     elif (options.tailer == 'retail'):
-        shell_tail = "%s -s %s -f %s" % (retail, state_dir, log_file)
+        retail_state_file = '%s/retail-%s%s' % (state_dir, class_name, dirsafe_logfile)
         retail_duration_file = '%s/retail-%s%s.dur' % (state_dir, class_name, dirsafe_logfile)
+        shell_tail = "%s -s %s -f %s" % (retail, retail_state_file, log_file)
 
     logger.debug("trying to get lock on %s", logtail_lock_file)
 
