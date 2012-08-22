@@ -43,12 +43,12 @@
 
 import os
 import sys
-import re 
+import re
 import optparse
 import stat
 import logging.handlers
 import fcntl
-import socket 
+import socket
 import traceback
 import pickle
 import struct
@@ -213,6 +213,9 @@ def submit_graphite(metrics, options):
     '''Submit statistics to Graphite.  If socket can't be opened to Graphite,
     we create a clot file and append the statistics to the end of it for
     later sending to Graphite.'''
+
+    clot_file = ""
+    clot = None
 
     if (re.match("^[\w\.\-]+\:\d+$", options.graphite_host) == None):
         raise Exception, "Invalid host:port found for Graphite: '%s'" % options.graphite_host
